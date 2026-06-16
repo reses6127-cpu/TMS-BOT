@@ -1,0 +1,637 @@
+const { Client, GatewayIntentBits, EmbedBuilder, Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, SlashCommandBuilder, REST, Routes } = require('discord.js');
+const { initTransfer, sendTransferPanel, createTransferTicket } = require('./transfer');
+
+const TOKEN = 'MTUxNDI4OTg0MDU0NjUxMzAyOQ.GmLGUI.qZhBN7ET93Pri8ZAZPyAixjSjnUSHqkYOY7nJo';
+const GUILD_ID = '1504900199548457153';
+const ROLE_ID = '1511482844365590729';
+const LOG_CHANNEL_ID = '1511482808034525367';
+const TICKET_CATEGORY_ID = '1514314281821147207';
+const TICKET_PANEL_CHANNEL_ID = '1511486592517275708';
+const STAFF_ROLE_ID = '1511483588078469120';
+const TICKET_STAFF_ROLE_1 = '1505537957296345220';
+const TICKET_STAFF_ROLE_2 = '1511424434786013254';
+const TICKET_STAFF_ROLE_3 = '1415061924870716171';
+const TICKET_STAFF_ROLE_4 = '1141505537968276901';
+const COMMANDER_ROLE_ID = '1505537957296345220';
+const COMMANDER_ROLE_2 = '1511424434786013254';
+const COMMANDER_ROLE_3 = '1415061924870716171';
+const COMMANDER_ROLE_4 = '1141505537968276901';
+const COMMANDER_ROLE_5 = '938';
+const YGS_ROLE_ID = '1511424434786013254';
+const TARGET_CLAN_TAG = 'TMS';
+
+const tagCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.DirectMessages,
+    ]
+});
+
+client.once(Events.ClientReady, async () => {
+    console.log(`✅ Bot hazır: ${client.user.tag}`);
+    console.log(`🎯 Sunucu: ${GUILD_ID}`);
+    console.log(`🏷️ Aranan tag: ${TARGET_CLAN_TAG}`);
+    
+    // Transfer modülünü initialize et
+    initTransfer(client, {
+        GUILD_ID,
+        TICKET_CATEGORY_ID,
+        TICKET_PANEL_CHANNEL_ID,
+        STAFF_ROLE_ID,
+        TICKET_STAFF_ROLE_1,
+        TICKET_STAFF_ROLE_2,
+        TICKET_STAFF_ROLE_3,
+        TICKET_STAFF_ROLE_4,
+        COMMANDER_ROLE_ID,
+        COMMANDER_ROLE_2,
+        COMMANDER_ROLE_3,
+        COMMANDER_ROLE_4,
+    });
+    
+    await registerSlashCommands();
+    await scanAllMembers();
+});
+
+async function registerSlashCommands() {
+    try {
+        const commands = [
+            new SlashCommandBuilder()
+                .setName('ticket')
+                .setDescription('Ticket panelini gönder')
+                .toJSON(),
+            new SlashCommandBuilder()
+                .setName('transfer')
+                .setDescription('Transfer panelini gönder')
+                .toJSON(),
+        ];
+
+        const rest = new REST({ version: '10' }).setToken(TOKEN);
+        await rest.put(
+            Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+            { body: commands }
+        );
+        console.log('✅ Slash komutları kaydedildi');
+    } catch (err) {
+        console.error('❌ Slash komut hatası:', err.message);
+    }
+}
+
+async function getClanTag(userId) {
+    try {
+        const cached = tagCache.get(userId);
+        if (cached && Date.now() - cached.time < CACHE_TTL) {
+            return cached.tag;
+        }
+        const rawUser = await client.rest.get(`/users/${userId}`);
+        const tag = rawUser?.clan?.tag || null;
+        tagCache.set(userId, { tag, time: Date.now() });
+        return tag;
+    } catch (err) {
+        console.error(`Tag hatası (${userId}): ${err.message}`);
+        return null;
+    }
+}
+
+async function memberHasTag(member) {
+    try {
+        const clanTag = await getClanTag(member.user.id);
+        return clanTag === TARGET_CLAN_TAG;
+    } catch {
+        return false;
+    }
+}
+
+async function giveRole(member) {
+    try {
+        if (member.roles.cache.has(ROLE_ID)) return;
+        await member.roles.add(ROLE_ID);
+        console.log(`✅ Rol verildi: ${member.user.tag}`);
+        await sendLog(member, 'add');
+    } catch (err) {
+        console.error(`❌ Rol verme hatası (${member.user.tag}):`, err.message);
+    }
+}
+
+async function removeRole(member) {
+    try {
+        if (!member.roles.cache.has(ROLE_ID)) return;
+        await member.roles.remove(ROLE_ID);
+        console.log(`🗑️ Rol alındı: ${member.user.tag}`);
+        await sendLog(member, 'remove');
+    } catch (err) {
+        console.error(`❌ Rol alma hatası (${member.user.tag}):`, err.message);
+    }
+}
+
+async function sendLog(member, action) {
+    try {
+        const guild = client.guilds.cache.get(GUILD_ID);
+        const logChannel = guild?.channels.cache.get(LOG_CHANNEL_ID);
+        if (!logChannel) return;
+
+        const isAdd = action === 'add';
+        const embed = new EmbedBuilder()
+            .setColor(isAdd ? 0x00FF7F : 0xFF4444)
+            .setTitle(isAdd ? '✅ TMS Tag Rolü Verildi' : '❌ TMS Tag Rolü Alındı')
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: '👤 Kullanıcı', value: `${member} (${member.user.tag})`, inline: true },
+                { name: '🆔 ID', value: member.user.id, inline: true },
+                { name: '🏷️ Tag', value: TARGET_CLAN_TAG, inline: true },
+                { name: '⚙️ İşlem', value: isAdd ? 'Rol Verildi' : 'Rol Alındı', inline: true },
+            )
+            .setTimestamp()
+            .setFooter({ text: 'TMS Tag Sistemi' });
+
+        await logChannel.send({ embeds: [embed] });
+    } catch (err) {
+        console.error('❌ Log hatası:', err.message);
+    }
+}
+
+async function scanAllMembers() {
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const members = await guild.members.fetch();
+
+        console.log(`🔍 ${members.size} üye taranıyor...`);
+
+        let given = 0;
+        let removed = 0;
+
+        const memberArray = Array.from(members.values());
+        const batchSize = 300;
+
+        for (let i = 0; i < memberArray.length; i += batchSize) {
+            const batch = memberArray.slice(i, i + batchSize);
+            await Promise.all(batch.map(async (member) => {
+                try {
+                    const clanTag = await getClanTag(member.user.id);
+                    const hasTag = clanTag === TARGET_CLAN_TAG;
+                    const hasRole = member.roles.cache.has(ROLE_ID);
+
+                    if (hasTag && !hasRole) {
+                        await giveRole(member);
+                        given++;
+                    } else if (!hasTag && hasRole) {
+                        await removeRole(member);
+                        removed++;
+                    }
+                } catch (err) {
+                    console.error(`Üye hatası (${member.user.id}): ${err.message}`);
+                }
+            }));
+        }
+
+        console.log(`✅ Tarama tamamlandı. Verilen: ${given}, Alınan: ${removed}`);
+    } catch (err) {
+        console.error('❌ Tarama hatası:', err.message);
+    }
+}
+
+async function sendTicketPanel() {
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const ticketChannel = guild?.channels.cache.get(TICKET_PANEL_CHANNEL_ID);
+        if (!ticketChannel) {
+            console.error('❌ Ticket kanali bulunamadi');
+            return;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF7F)
+            .setTitle('🎫 TMS Destek Sistemi')
+            .setDescription('Sorununuz varsa aşağıdaki butona basarak ticket oluşturun.')
+            .addFields(
+                { name: '📋 Kategori Seçin', value: '**Destek** - Teknik destek için\n**Şikayet** - Şikayet bildirmek için\n**Diğer** - Diğer konular için', inline: false },
+            )
+            .setFooter({ text: 'TMS Ticket Sistemi' });
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('ticket_destek')
+                    .setLabel('📞 Destek')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('ticket_sikayet')
+                    .setLabel('⚠️ Şikayet')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('ticket_diger')
+                    .setLabel('❓ Diğer')
+                    .setStyle(ButtonStyle.Secondary),
+            );
+
+        const messages = await ticketChannel.messages.fetch({ limit: 10 });
+        for (const msg of messages) {
+            if (msg[1].author.id === client.user.id) {
+                await msg[1].delete().catch(() => {});
+            }
+        }
+
+        await ticketChannel.send({ embeds: [embed], components: [row] });
+        console.log('✅ Ticket paneli gönderildi');
+    } catch (err) {
+        console.error('❌ Ticket paneli hatası:', err.message);
+    }
+}
+
+async function sendTransferPanel(channel = null) {
+    try {
+        let targetChannel = channel;
+        
+        if (!targetChannel) {
+            const guild = await client.guilds.fetch(GUILD_ID);
+            targetChannel = guild?.channels.cache.get(TICKET_PANEL_CHANNEL_ID);
+        }
+        
+        if (!targetChannel) {
+            console.error('❌ Ticket kanali bulunamadi');
+            return;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x7B68EE)
+            .setTitle('💱 Transfer Sistemi')
+            .setDescription('Transfer almak istiyorsunuz? Aşağıdaki menüyü kullanarak duruma en uygun kategoriyi seçip bir bilet oluşturabilirsiniz. Transfer ekibimiz en kısa sürede sizinle ilgilenecektir.')
+            .addFields(
+                { name: '💎 Bireysel Transfer', value: '• Tek kişilik transferler\n• Başkumandan rutbesine kadar sınır.', inline: false },
+                { name: '👥 Ekipli/Özet Transfer', value: '• Ekipli, Sunuculu/Family\'li transferler.\n• Başkumandan rutbesine kadar sınır, ancak ekibinizin büyüklüğüne göre bu sınır değişebilir.', inline: false },
+            )
+            .setFooter({ text: 'TMS Transfer Sistemi' });
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('transfer_bireysel')
+                    .setLabel('💎 Bireysel Transfer')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('transfer_ekipli')
+                    .setLabel('👥 Ekipli Transfer')
+                    .setStyle(ButtonStyle.Success),
+            );
+
+        await targetChannel.send({ embeds: [embed], components: [row] });
+        console.log('✅ Transfer paneli gönderildi');
+    } catch (err) {
+        console.error('❌ Transfer paneli hatası:', err.message);
+    }
+}
+
+async function createTicket(interaction, type) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+        const guild = interaction.guild;
+        const user = interaction.user;
+        
+        let category = guild.channels.cache.get(TICKET_CATEGORY_ID);
+        if (!category) {
+            category = await guild.channels.create({
+                name: 'TMS - Tickets',
+                type: ChannelType.GuildCategory,
+            });
+        }
+
+        const ticketChannel = await guild.channels.create({
+            name: `ticket-${type}-${user.username}`,
+            type: ChannelType.GuildText,
+            parent: category,
+            permissionOverwrites: [
+                {
+                    id: guild.id,
+                    deny: ['ViewChannel'],
+                },
+                {
+                    id: user.id,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                },
+                {
+                    id: STAFF_ROLE_ID,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_1,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_2,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_3,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_4,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_5,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+            ],
+        });
+
+        const typeEmoji = {
+            destek: '📞',
+            sikayet: '⚠️',
+            diger: '❓',
+        };
+
+        const typeLabel = {
+            destek: 'Destek',
+            sikayet: 'Şikayet',
+            diger: 'Diğer',
+        };
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF7F)
+            .setTitle(`${typeEmoji[type]} TMS ${typeLabel[type]} Ticket'ı`)
+            .setDescription(`Hoşgeldiniz ${user}!\n\nSorunuzu açıklayın, takımımız yardımcı olmaya hazır.`)
+            .setFooter({ text: `Ticket ID: ${ticketChannel.id}` });
+
+        const closeRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`close_${ticketChannel.id}`)
+                    .setLabel('🔒 Ticket Kapat')
+                    .setStyle(ButtonStyle.Danger),
+            );
+
+        await ticketChannel.send({ content: `<@&${STAFF_ROLE_ID}>`, embeds: [embed], components: [closeRow] });
+        
+        await interaction.editReply({
+            content: `✅ Ticket oluşturuldu: ${ticketChannel}`,
+            ephemeral: true,
+        });
+
+        console.log(`🎫 Ticket oluşturuldu: ${user.tag} - ${ticketChannel.name}`);
+    } catch (err) {
+        console.error('❌ Ticket oluşturma hatası:', err.message);
+        await interaction.editReply({
+            content: `❌ Hata: ${err.message}`,
+            ephemeral: true,
+        }).catch(() => {});
+    }
+}
+
+async function closeTicket(interaction, ticketId) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+        const channel = interaction.guild.channels.cache.get(ticketId);
+        if (!channel) {
+            await interaction.editReply({
+                content: '❌ Kanal bulunamadı',
+                ephemeral: true,
+            });
+            return;
+        }
+
+        await channel.permissionOverwrites.create(
+            interaction.user.id,
+            { ViewChannel: false }
+        );
+
+        const embed = new EmbedBuilder()
+            .setColor(0xFF4444)
+            .setTitle('🔒 Ticket Kapatıldı')
+            .setDescription('Bu ticket kapatılmıştır. Yetkili ekip sorununuzu çözdüğünü düşünüyor.\n\nGeri açmak isterseniz aşağıdaki butona basın.')
+            .setFooter({ text: 'TMS Ticket Sistemi' });
+
+        const reopenRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`reopen_${ticketId}`)
+                    .setLabel('🔓 Geri Aç')
+                    .setStyle(ButtonStyle.Success),
+            );
+
+        await channel.send({ embeds: [embed], components: [reopenRow] });
+
+        await interaction.editReply({
+            content: '✅ Ticket kapatıldı!',
+            ephemeral: true,
+        });
+
+        console.log(`🔒 Ticket kapatıldı: ${channel.name}`);
+    } catch (err) {
+        console.error('❌ Ticket kapatma hatası:', err.message);
+        await interaction.editReply({
+            content: `❌ Hata: ${err.message}`,
+            ephemeral: true,
+        }).catch(() => {});
+    }
+}
+
+async function reopenTicket(interaction, ticketId) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+        const channel = interaction.guild.channels.cache.get(ticketId);
+        if (!channel) {
+            await interaction.editReply({
+                content: '❌ Kanal bulunamadı',
+                ephemeral: true,
+            });
+            return;
+        }
+
+        await channel.permissionOverwrites.create(
+            interaction.user.id,
+            { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }
+        );
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF7F)
+            .setTitle('🔓 Ticket Geri Açıldı')
+            .setDescription('Ticket geri açılmıştır. Sorununuz devam ederse yazabilirsiniz.')
+            .setFooter({ text: 'TMS Ticket Sistemi' });
+
+        await channel.send({ embeds: [embed] });
+
+        await interaction.editReply({
+            content: '✅ Ticket geri açıldı!',
+            ephemeral: true,
+        });
+
+        console.log(`🔓 Ticket geri açıldı: ${channel.name}`);
+    } catch (err) {
+        console.error('❌ Ticket geri açma hatası:', err.message);
+        await interaction.editReply({
+            content: `❌ Hata: ${err.message}`,
+            ephemeral: true,
+        }).catch(() => {});
+    }
+}
+
+async function createTransferTicket(interaction, type) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+        const guild = interaction.guild;
+        const user = interaction.user;
+        
+        let category = guild.channels.cache.get(TICKET_CATEGORY_ID);
+        if (!category) {
+            category = await guild.channels.create({
+                name: 'TMS - Transfer',
+                type: ChannelType.GuildCategory,
+            });
+        }
+
+        const ticketChannel = await guild.channels.create({
+            name: `transfer-${type}-${user.username}`,
+            type: ChannelType.GuildText,
+            parent: category,
+            permissionOverwrites: [
+                {
+                    id: guild.id,
+                    allow: ['ViewChannel'],
+                },
+                {
+                    id: user.id,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_1,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_2,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_3,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+                {
+                    id: TICKET_STAFF_ROLE_4,
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+                },
+            ],
+        });
+
+        const typeEmoji = {
+            bireysel: '💎',
+            ekipli: '👥',
+        };
+
+        const typeLabel = {
+            bireysel: 'Bireysel Transfer',
+            ekipli: 'Ekipli Transfer',
+        };
+
+        const embed = new EmbedBuilder()
+            .setColor(0x7B68EE)
+            .setTitle(`${typeEmoji[type]} TMS ${typeLabel[type]} Talebi`)
+            .setDescription(`Hoşgeldiniz ${user}!\n\nTransfer talebiniz hakkında bilgi verin, transfer ekibimiz yardımcı olmaya hazır.`)
+            .setFooter({ text: `Ticket ID: ${ticketChannel.id}` });
+
+        const closeRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`close_${ticketChannel.id}`)
+                    .setLabel('🔒 Ticket Kapat')
+                    .setStyle(ButtonStyle.Danger),
+            );
+
+        await ticketChannel.send({ content: `<@&${STAFF_ROLE_ID}>`, embeds: [embed], components: [closeRow] });
+        
+        const formEmbed = new EmbedBuilder()
+            .setColor(0x7B68EE)
+            .setTitle('📋 Transfer Formu')
+            .addFields(
+                { name: 'İsim:', value: 'Lütfen adınızı yazınız', inline: false },
+                { name: 'Oynadığım Kamplar:', value: 'Lütfen kamplarınızı yazınız', inline: false },
+                { name: 'Tecrübelerim:', value: 'Lütfen tecrübelerinizi yazınız', inline: false },
+                { name: 'SS:', value: 'Lütfen screenshot\'larınızı paylaşınız', inline: false },
+                { name: 'Tag:', value: 'Lütfen taglerinizi yazınız', inline: false },
+            )
+            .setFooter({ text: 'Formu tamamladıktan sonra Yetkili ekip inceleyecektir' });
+
+        await ticketChannel.send({ 
+            content: `<@&${COMMANDER_ROLE_ID}> <@&${COMMANDER_ROLE_2}> <@&${COMMANDER_ROLE_3}> <@&${COMMANDER_ROLE_4}>`,
+            embeds: [formEmbed] 
+        });
+        
+        await interaction.editReply({
+            content: `✅ Transfer talebi oluşturuldu: ${ticketChannel}`,
+            ephemeral: true,
+        });
+
+        console.log(`💱 Transfer talebi oluşturuldu: ${user.tag} - ${ticketChannel.name}`);
+    } catch (err) {
+        console.error('❌ Transfer talebi oluşturma hatası:', err.message);
+        await interaction.editReply({
+            content: `❌ Hata: ${err.message}`,
+            ephemeral: true,
+        }).catch(() => {});
+    }
+}
+
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    if (newMember.guild.id !== GUILD_ID) return;
+    tagCache.delete(newMember.user.id);
+
+    const hadTag = await memberHasTag(oldMember);
+    const hasTag = await memberHasTag(newMember);
+
+    if (!hadTag && hasTag) {
+        console.log(`🎯 Tag eklendi! ${newMember.user.username}`);
+        await giveRole(newMember);
+    } else if (hadTag && !hasTag) {
+        console.log(`❌ Tag kaldırıldı! ${newMember.user.username}`);
+        await removeRole(newMember);
+    }
+});
+
+client.on(Events.GuildMemberAdd, async (member) => {
+    if (member.guild.id !== GUILD_ID) return;
+    if (await memberHasTag(member)) {
+        await giveRole(member);
+    }
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isCommand()) {
+        if (interaction.commandName === 'ticket') {
+            await interaction.deferReply({ ephemeral: true });
+            await sendTicketPanel();
+            await interaction.editReply({
+                content: '✅ Ticket paneli gönderildi!',
+                ephemeral: true,
+            });
+        } else if (interaction.commandName === 'transfer') {
+            await interaction.deferReply({ ephemeral: true });
+            await sendTransferPanel(interaction.channel);
+            await interaction.editReply({
+                content: '✅ Transfer paneli gönderildi!',
+                ephemeral: true,
+            });
+        }
+        return;
+    }
+
+    if (interaction.isButton()) {
+        if (interaction.customId.startsWith('ticket_')) {
+            const type = interaction.customId.replace('ticket_', '');
+            await createTicket(interaction, type);
+        } else if (interaction.customId.startsWith('transfer_')) {
+            const type = interaction.customId.replace('transfer_', '');
+            await createTransferTicket(interaction, type);
+        } else if (interaction.customId.startsWith('close_')) {
+            const ticketId = interaction.customId.replace('close_', '');
+            await closeTicket(interaction, ticketId);
+        } else if (interaction.customId.startsWith('reopen_')) {
+            const ticketId = interaction.customId.replace('reopen_', '');
+            await reopenTicket(interaction, ticketId);
+        }
+    }
+});
+
+client.login(TOKEN);
