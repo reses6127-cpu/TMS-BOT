@@ -426,6 +426,8 @@ async function reopenTicket(interaction, ticketId) {
             ephemeral: true,
         }).catch(() => {});
     }
+}
+
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     if (newMember.guild.id !== GUILD_ID) return;
     tagCache.delete(newMember.user.id);
