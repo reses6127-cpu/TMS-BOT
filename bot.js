@@ -1,7 +1,8 @@
 const { Client, GatewayIntentBits, EmbedBuilder, Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, SlashCommandBuilder, REST, Routes } = require('discord.js');
 const { initTransfer, sendTransferPanel, createTransferTicket } = require('./transfer');
+require('dotenv').config();
 
-const TOKEN = 'MTUxNDI4OTg0MDU0NjUxMzAyOQ.GmLGUI.qZhBN7ET93Pri8ZAZPyAixjSjnUSHqkYOY7nJo';
+const TOKEN = process.env.TOKEN;
 const GUILD_ID = '1504900199548457153';
 const ROLE_ID = '1511482844365590729';
 const LOG_CHANNEL_ID = '1511482808034525367';
