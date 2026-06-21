@@ -499,6 +499,41 @@ client.on(Events.InteractionCreate, async (interaction) => {
             const channel = interaction.guild.channels.cache.get(ticketId);
             if (channel) {
                 await interaction.reply({ content: '🗑️ Kanal siliniyor...', ephemeral: true });
+
+                // Ticket mesajlarını kaydet
+                try {
+                    const logChannel = interaction.guild.channels.cache.get('1505539177733820427');
+                    if (logChannel) {
+                        const messages = await channel.messages.fetch({ limit: 100 });
+                        const sorted = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+                        const logEmbed = new EmbedBuilder()
+                            .setColor(0xFF4444)
+                            .setTitle(`📋 Ticket Kaydı: #${channel.name}`)
+                            .setDescription(`Kapatılan: <#${channel.id}>\nSilen: ${interaction.user}`)
+                            .setTimestamp()
+                            .setFooter({ text: 'TMS Ticket Log' });
+
+                        await logChannel.send({ embeds: [logEmbed] });
+
+                        let logText = '';
+                        for (const [, msg] of sorted) {
+                            if (msg.author.bot && msg.embeds.length > 0) continue;
+                            const line = `[${new Date(msg.createdTimestamp).toLocaleString('tr-TR')}] ${msg.author.tag}: ${msg.content || '[embed/dosya]'}\n`;
+                            logText += line;
+                            if (logText.length > 1800) {
+                                await logChannel.send({ content: `\`\`\`\n${logText}\`\`\`` });
+                                logText = '';
+                            }
+                        }
+                        if (logText.length > 0) {
+                            await logChannel.send({ content: `\`\`\`\n${logText}\`\`\`` });
+                        }
+                    }
+                } catch (err) {
+                    console.error('❌ Ticket log hatası:', err.message);
+                }
+
                 await channel.delete();
             }
         } else if (interaction.customId.startsWith('reopen_')) {
