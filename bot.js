@@ -67,6 +67,14 @@ async function registerSlashCommands() {
                 .setName('transfer')
                 .setDescription('Transfer panelini gönder')
                 .toJSON(),
+            new SlashCommandBuilder()
+                .setName('otorol')
+                .setDescription('Sunucuya girenlere otomatik verilecek rolü ayarla')
+                .addRoleOption(option =>
+                    option.setName('rol')
+                        .setDescription('Otomatik verilecek rol')
+                        .setRequired(true))
+                .toJSON(),
         ];
 
         const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -431,13 +439,14 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 });
 
 const AUTO_ROLE_ID = '1518375640879857694';
+let autoRoleId = AUTO_ROLE_ID;
 
 client.on(Events.GuildMemberAdd, async (member) => {
     if (member.guild.id !== GUILD_ID) return;
 
     // Sunucuya giren herkese otomatik rol ver
     try {
-        await member.roles.add(AUTO_ROLE_ID);
+        await member.roles.add(autoRoleId);
         console.log(`✅ Otomatik rol verildi: ${member.user.tag}`);
     } catch (err) {
         console.error(`❌ Otomatik rol hatası (${member.user.tag}):`, err.message);
@@ -462,6 +471,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await sendTransferPanel(interaction.channel);
             await interaction.editReply({
                 content: '✅ Transfer paneli gönderildi!',
+                ephemeral: true,
+            });
+        } else if (interaction.commandName === 'otorol') {
+            const rol = interaction.options.getRole('rol');
+            autoRoleId = rol.id;
+            await interaction.reply({
+                content: `✅ Otomatik rol ayarlandı: <@&${rol.id}>`,
                 ephemeral: true,
             });
         }
