@@ -505,30 +505,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     const logChannel = interaction.guild.channels.cache.get('1505539177733820427');
                     if (logChannel) {
                         const messages = await channel.messages.fetch({ limit: 100 });
-                        const sorted = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+                        const sorted = [...messages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
+                        // Başlık embed
                         const logEmbed = new EmbedBuilder()
                             .setColor(0xFF4444)
                             .setTitle(`📋 Ticket Kaydı: #${channel.name}`)
-                            .setDescription(`Kapatılan: <#${channel.id}>\nSilen: ${interaction.user}`)
+                            .addFields(
+                                { name: '📁 Kanal', value: `#${channel.name}`, inline: true },
+                                { name: '🗑️ Silen', value: `${interaction.user}`, inline: true },
+                                { name: '📅 Tarih', value: new Date().toLocaleString('tr-TR'), inline: true },
+                                { name: '💬 Mesaj Sayısı', value: `${sorted.filter(m => !m.author.bot).length}`, inline: true },
+                            )
                             .setTimestamp()
                             .setFooter({ text: 'TMS Ticket Log' });
 
                         await logChannel.send({ embeds: [logEmbed] });
 
-                        let logText = '';
-                        for (const [, msg] of sorted) {
-                            if (msg.author.bot && msg.embeds.length > 0) continue;
-                            const line = `[${new Date(msg.createdTimestamp).toLocaleString('tr-TR')}] ${msg.author.tag}: ${msg.content || '[embed/dosya]'}\n`;
-                            logText += line;
-                            if (logText.length > 1800) {
-                                await logChannel.send({ content: `\`\`\`\n${logText}\`\`\`` });
-                                logText = '';
+                        // Her mesajı ayrı embed olarak gönder
+                        for (const msg of sorted) {
+                            if (msg.author.bot) continue;
+
+                            const msgEmbed = new EmbedBuilder()
+                                .setColor(0x7B68EE)
+                                .setAuthor({
+                                    name: msg.author.tag,
+                                    iconURL: msg.author.displayAvatarURL({ dynamic: true }),
+                                })
+                                .setTimestamp(msg.createdAt);
+
+                            if (msg.content) {
+                                msgEmbed.setDescription(msg.content);
+                            }
+
+                            // Fotoğraf ve dosyaları ekle
+                            const imageAttachments = msg.attachments.filter(a =>
+                                a.contentType && a.contentType.startsWith('image/')
+                            );
+                            const otherAttachments = msg.attachments.filter(a =>
+                                !a.contentType || !a.contentType.startsWith('image/')
+                            );
+
+                            if (imageAttachments.size > 0) {
+                                msgEmbed.setImage(imageAttachments.first().url);
+                            }
+
+                            if (otherAttachments.size > 0) {
+                                msgEmbed.addFields({
+                                    name: '📎 Dosyalar',
+                                    value: otherAttachments.map(a => `[${a.name}](${a.url})`).join('\n'),
+                                });
+                            }
+
+                            await logChannel.send({ embeds: [msgEmbed] });
+
+                            // Birden fazla fotoğraf varsa gerisini de gönder
+                            if (imageAttachments.size > 1) {
+                                const rest = [...imageAttachments.values()].slice(1);
+                                for (const att of rest) {
+                                    const imgEmbed = new EmbedBuilder()
+                                        .setColor(0x7B68EE)
+                                        .setImage(att.url)
+                                        .setAuthor({
+                                            name: msg.author.tag,
+                                            iconURL: msg.author.displayAvatarURL({ dynamic: true }),
+                                        });
+                                    await logChannel.send({ embeds: [imgEmbed] });
+                                }
                             }
                         }
-                        if (logText.length > 0) {
-                            await logChannel.send({ content: `\`\`\`\n${logText}\`\`\`` });
-                        }
+
+                        await logChannel.send({ content: '─────────────────────────' });
                     }
                 } catch (err) {
                     console.error('❌ Ticket log hatası:', err.message);
