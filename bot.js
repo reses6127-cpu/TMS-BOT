@@ -430,8 +430,19 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     }
 });
 
+const AUTO_ROLE_ID = '1518375640879857694';
+
 client.on(Events.GuildMemberAdd, async (member) => {
     if (member.guild.id !== GUILD_ID) return;
+
+    // Sunucuya giren herkese otomatik rol ver
+    try {
+        await member.roles.add(AUTO_ROLE_ID);
+        console.log(`✅ Otomatik rol verildi: ${member.user.tag}`);
+    } catch (err) {
+        console.error(`❌ Otomatik rol hatası (${member.user.tag}):`, err.message);
+    }
+
     if (await memberHasTag(member)) {
         await giveRole(member);
     }
