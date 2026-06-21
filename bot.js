@@ -346,18 +346,18 @@ async function closeTicket(interaction, ticketId) {
         const embed = new EmbedBuilder()
             .setColor(0xFF4444)
             .setTitle('🔒 Ticket Kapatıldı')
-            .setDescription('Bu ticket kapatılmıştır. Yetkili ekip sorununuzu çözdüğünü düşünüyor.\n\nGeri açmak isterseniz aşağıdaki butona basın.')
+            .setDescription('Bu ticket kapatılmıştır. Yetkili ekip sorununuzu çözdüğünü düşünüyor.')
             .setFooter({ text: 'TMS Ticket Sistemi' });
 
-        const reopenRow = new ActionRowBuilder()
+        const deleteRow = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`reopen_${ticketId}`)
-                    .setLabel('🔓 Geri Aç')
-                    .setStyle(ButtonStyle.Success),
+                    .setCustomId(`delete_${ticketId}`)
+                    .setLabel('🗑️ Kanalı Sil')
+                    .setStyle(ButtonStyle.Danger),
             );
 
-        await channel.send({ embeds: [embed], components: [reopenRow] });
+        await channel.send({ embeds: [embed], components: [deleteRow] });
 
         await interaction.editReply({
             content: '✅ Ticket kapatıldı!',
@@ -478,6 +478,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } else if (interaction.customId.startsWith('close_')) {
             const ticketId = interaction.customId.replace('close_', '');
             await closeTicket(interaction, ticketId);
+        } else if (interaction.customId.startsWith('delete_')) {
+            const ticketId = interaction.customId.replace('delete_', '');
+            const channel = interaction.guild.channels.cache.get(ticketId);
+            if (channel) {
+                await interaction.reply({ content: '🗑️ Kanal siliniyor...', ephemeral: true });
+                await channel.delete();
+            }
         } else if (interaction.customId.startsWith('reopen_')) {
             const ticketId = interaction.customId.replace('reopen_', '');
             await reopenTicket(interaction, ticketId);
