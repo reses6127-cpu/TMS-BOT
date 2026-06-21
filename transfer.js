@@ -87,7 +87,7 @@ async function createTransferTicket(interaction, type) {
             permissionOverwrites: [
                 {
                     id: guild.id,
-                    allow: ['ViewChannel'],
+                    deny: ['ViewChannel'],
                 },
                 {
                     id: user.id,
@@ -99,14 +99,6 @@ async function createTransferTicket(interaction, type) {
                 },
                 {
                     id: TICKET_STAFF_ROLE_2,
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
-                },
-                {
-                    id: TICKET_STAFF_ROLE_3,
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
-                },
-                {
-                    id: TICKET_STAFF_ROLE_4,
                     allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
                 },
             ],
@@ -151,7 +143,7 @@ async function createTransferTicket(interaction, type) {
             .setFooter({ text: 'Formu tamamladıktan sonra Yetkili ekip inceleyecektir' });
 
         await ticketChannel.send({ 
-            content: `<@&${COMMANDER_ROLE_ID}> <@&${COMMANDER_ROLE_2}> <@&${COMMANDER_ROLE_3}> <@&${COMMANDER_ROLE_4}>`,
+            content: `<@&${COMMANDER_ROLE_ID}> <@&${COMMANDER_ROLE_2}>`,
             embeds: [formEmbed] 
         });
         

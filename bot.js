@@ -10,13 +10,13 @@ const TICKET_CATEGORY_ID = '1514314281821147207';
 const TICKET_PANEL_CHANNEL_ID = '1511486592517275708';
 const STAFF_ROLE_ID = '1511483588078469120';
 const TICKET_STAFF_ROLE_1 = '1505537968276901938';
-const TICKET_STAFF_ROLE_2 = '1506275716482990160';
-const TICKET_STAFF_ROLE_3 = '1518357298341482759';
-const TICKET_STAFF_ROLE_4 = '1511483588078469120';
+const TICKET_STAFF_ROLE_2 = '1511483588078469120';
+const TICKET_STAFF_ROLE_3 = null;
+const TICKET_STAFF_ROLE_4 = null;
 const COMMANDER_ROLE_ID = '1505537968276901938';
-const COMMANDER_ROLE_2 = '1506275716482990160';
-const COMMANDER_ROLE_3 = '1518357298341482759';
-const COMMANDER_ROLE_4 = '1511483588078469120';
+const COMMANDER_ROLE_2 = '1511483588078469120';
+const COMMANDER_ROLE_3 = null;
+const COMMANDER_ROLE_4 = null;
 const TARGET_CLAN_TAG = 'TMS';
 
 const tagCache = new Map();
@@ -278,14 +278,6 @@ async function createTicket(interaction, type) {
                 },
                 {
                     id: TICKET_STAFF_ROLE_2,
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
-                },
-                {
-                    id: TICKET_STAFF_ROLE_3,
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
-                },
-                {
-                    id: TICKET_STAFF_ROLE_4,
                     allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
                 },
             ],
